@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 
+import os.path
 import sys
 import re
 import subprocess
+import json
 from nvr.nvr import Nvr
 
 class Buildhelper:
@@ -11,12 +13,14 @@ class Buildhelper:
     Creates a connection to the neovim instance and handles the creation of the
     signs as well as the population of quickfix list and sign list.
     """
-    def __init__(self):
+    def __init__(self, errortypes):
         """
         Create session and signs.
         """
         self.nvr = Nvr('/tmp/nvimsocket', False)
         self.nvr.attach()
+
+        self.errortypes = errortypes
 
         self.create_signs()
 
@@ -35,8 +39,25 @@ class Buildhelper:
         """
         Create the signs for 'error' and 'warning'.
         """
-        self.nvr.server.command("sign define warning text=>> texthl=Blue")
-        self.nvr.server.command("sign define error text=>> texthl=Red")
+        # create highlights
+        for name, attributes in self.errortypes['highlights'].items():
+            cmd = "highlight buildhelper_{} {}".format(name,
+                    " ".join(map(lambda k: "{}={}".format(k[0], k[1]), attributes.items())))
+            print(cmd)
+            self.nvr.server.command(cmd)
+
+        # create signs
+        for name, attributes in self.errortypes['signtypes'].items():
+            cmd = "sign define {name} text={mark} texthl=buildhelper_{highlight}".format(name=name, **attributes)
+            print(cmd)
+            self.nvr.server.command(cmd)
+
+        # create mapping from error name to sign
+        self.mapping = {}
+        for name, attributes in self.errortypes['signtypes'].items():
+            for errorname in attributes['errornames']:
+                self.mapping[errorname] = "{}".format(name)
+        print(self.mapping)
 
     def populate_signs(self, args):
         """
@@ -45,21 +66,23 @@ class Buildhelper:
         :param args: List of (file, line, errortype) tuples, where errortype is
                      one one of the sign types defined in create_signs.
         """
-        self.nvr.server.command("sign unplace 2334")
+        self.nvr.server.command("sign unplace *")
         id=2334
         for filename, line, errortype in args:
+            if errortype not in self.mapping:
+                print(">>{}<< Error: {} is not a configured error type!".format(sys.argv[0], errortype))
+                continue
             self.nvr.server.command("sign place 2334 line={} name={} file={}".format(
-                line, errortype, filename))
+                line, self.mapping[errortype], filename))
 
-def load_output(iterable):
+def load_output(iterable, helper):
     """
     Load output of iterable line by line, check for errorformat, parse, and
     send to neovim.
 
     :param iterable: An iterable of string lines.
     """
-    b = Buildhelper()
-    regex = re.compile(r"^([^:]+):(\d+):\d+: (fatal )?(warning|error):.*")
+    regex = re.compile(r"^([^:]+):(\d+):\d+: ([^:]+):.*")
     qflist = []
     signlist = []
     for line in iterable:
@@ -67,16 +90,60 @@ def load_output(iterable):
         if x:
             print(line)
             qflist.append(line)
-            signlist.append(tuple(map(x.group, (1,2,4))))
+            signlist.append(tuple(map(x.group, (1,2,3))))
 
-    b.populate_quickfix(qflist)
-    b.populate_signs(signlist)
+    helper.populate_quickfix(qflist)
+    helper.populate_signs(signlist)
 
+def errortypes():
+    """
+    Load error types from config file, or return default.
+    """
+    if os.path.exists('.buildhelper'):
+        # load config
+        with open('.buildhelper', 'r') as f:
+            return json.loads("".join(f.readlines()))
+
+    return {
+        "highlights": {
+                "error": {
+                        "ctermfg": "9",
+                        "ctermbg": "NONE",
+                        "guifg": "#bf616a",
+                        "guibg": "#282828"
+                    },
+                "warning": {
+                        "ctermfg": "3",
+                        "ctermbg": "NONE",
+                        "guifg": "#ebcb8b",
+                        "guibg": "#282828"
+                    }
+            },
+        "signtypes": {
+            "error": {
+                "errornames": [
+                    "error",
+                    "fatal error"
+                ],
+                "highlight": "error",
+                "mark": ">>"
+            },
+            "warning": {
+                "errornames": [
+                    "warning"
+                ],
+                "highlight": "warning",
+                "mark": "> "
+            }
+        }
+    }
 
 if __name__ == '__main__':
+    et = errortypes()
+    b = Buildhelper(et)
     cmd = sys.argv[1:]
     proc = subprocess.run(cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             universal_newlines=True)
-    load_output(proc.stdout.split('\n'))
+    load_output(proc.stdout.split('\n'), b)

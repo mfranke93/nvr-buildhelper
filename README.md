@@ -22,6 +22,11 @@ neovim instance receiving the quickfix list and signs must have the
 After copying the script to a directory listed in `$PATH`, it can simply be
 called with the actual build command appended as command line arguments.
 
+In order to configure the types of errors that should be parsed, the sign
+highlights or signs, the file `.buildhelper` must be present in the directory
+where the tool is called. The default configuration is present in the
+repository as `buildhelper.json`.
+
 Example:
 
 `nvr-buildhelper make`

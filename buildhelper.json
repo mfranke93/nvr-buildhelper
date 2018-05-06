@@ -1,0 +1,33 @@
+{
+    "highlights": {
+        "error": {
+            "ctermfg": "9",
+                "ctermbg": "NONE",
+                "guifg": "#bf616a",
+                "guibg": "#282828"
+        },
+            "warning": {
+                "ctermfg": "3",
+                "ctermbg": "NONE",
+                "guifg": "#ebcb8b",
+                "guibg": "#282828"
+            }
+    },
+        "signtypes": {
+            "error": {
+                "errornames": [
+                    "error",
+                "fatal error"
+                ],
+                "highlight": "error",
+                "mark": ">>"
+            },
+            "warning": {
+                "errornames": [
+                    "warning"
+                ],
+                "highlight": "warning",
+                "mark": "> "
+            }
+        }
+}
