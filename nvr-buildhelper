@@ -6,33 +6,45 @@ import subprocess
 from nvr.nvr import Nvr
 
 class Buildhelper:
+    """
+    Build helper class.
+    Creates a connection to the neovim instance and handles the creation of the
+    signs as well as the population of quickfix list and sign list.
+    """
     def __init__(self):
+        """
+        Create session and signs.
+        """
         self.nvr = Nvr('/tmp/nvimsocket', False)
         self.nvr.attach()
 
         self.create_signs()
 
-    def load_errors(self, args):
-        """Load in a list of `errorformat` strings"""
-        def extract_sign_args(s):
-            l = s.split(':')
-            return map(lambda x: x[1].strip(), filter(lambda x: (x[0] in [0,1,3]), enumerate(l)))
-        self.populate_quickfix(args)
-        self.populate_signs(map(extract_sign_args, args))
-
     def populate_quickfix(self, args):
-        """Let args be a list of File:Line:Col: Msg strings."""
+        """
+        Load in a list of `errorformat` strings.
+
+        :param args: List of strings in the format 'file:line:col: (error|warning): message'
+        """
         self.nvr.server.command("call setqflist([])")
         for arg in args:
             self.nvr.server.command("caddexpr '{}'".format(
                 arg.rstrip().replace("'", "''").replace("|", "\\")))
 
     def create_signs(self):
-        """Signs 'error', 'warning'"""
+        """
+        Create the signs for 'error' and 'warning'.
+        """
         self.nvr.server.command("sign define warning text=>> texthl=Blue")
         self.nvr.server.command("sign define error text=>> texthl=Red")
 
     def populate_signs(self, args):
+        """
+        Populate the signs.
+
+        :param args: List of (file, line, errortype) tuples, where errortype is
+                     one one of the sign types defined in create_signs.
+        """
         self.nvr.server.command("sign unplace 2334")
         id=2334
         for filename, line, errortype in args:
@@ -40,6 +52,12 @@ class Buildhelper:
                 line, errortype, filename))
 
 def load_output(iterable):
+    """
+    Load output of iterable line by line, check for errorformat, parse, and
+    send to neovim.
+
+    :param iterable: An iterable of string lines.
+    """
     b = Buildhelper()
     regex = re.compile(r"^([^:]+):(\d+):\d+: (warning|error):.*")
     qflist = []
@@ -50,15 +68,11 @@ def load_output(iterable):
             qflist.append(line)
             signlist.append(tuple(map(x.group, range(1,4))))
 
-    print(qflist)
-    print(signlist)
-
     b.populate_quickfix(qflist)
     b.populate_signs(signlist)
 
 
 if __name__ == '__main__':
-    a = sys.argv[1:]
-
-    x = subprocess.run(a, stdout=subprocess.PIPE, universal_newlines=True)
-    load_output(x.stdout.split('\n'))
+    cmd = sys.argv[1:]
+    proc = subprocess.run(cmd, stdout=subprocess.PIPE, universal_newlines=True)
+    load_output(proc.stdout.split('\n'))
