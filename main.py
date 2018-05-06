@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 
+import sys
+import re
+import subprocess
 from nvr.nvr import Nvr
 
 class Buildhelper:
@@ -8,6 +11,14 @@ class Buildhelper:
         self.nvr.attach()
 
         self.create_signs()
+
+    def load_errors(self, args):
+        """Load in a list of `errorformat` strings"""
+        def extract_sign_args(s):
+            l = s.split(':')
+            return map(lambda x: x[1].strip(), filter(lambda x: (x[0] in [0,1,3]), enumerate(l)))
+        self.populate_quickfix(args)
+        self.populate_signs(map(extract_sign_args, args))
 
     def populate_quickfix(self, args):
         """Let args be a list of File:Line:Col: Msg strings."""
@@ -28,18 +39,26 @@ class Buildhelper:
             self.nvr.server.command("sign place 2334 line={} name={} file={}".format(
                 line, errortype, filename))
 
-if __name__ == '__main__':
+def load_output(iterable):
     b = Buildhelper()
-    errargs = [
-        "/home/max/prog/nvr-buildhelper/main.py:19:5: warning: def in class",
-        "/home/max/prog/nvr-buildhelper/main.py:25:42: error: nvim command suspect",
-        "/home/max/prog/nvr-buildhelper/test:3:1: error: unexpected token: 'error'"
-            ]
-    signargs = [
-        ( "/home/max/prog/nvr-buildhelper/main.py", 19, "warning"),
-        ( "/home/max/prog/nvr-buildhelper/main.py", 25, "error"),
-        ( "/home/max/prog/nvr-buildhelper/test", 3, "error")
-            ]
+    regex = re.compile(r"^([^:]+):(\d+):\d+: (warning|error):.*")
+    qflist = []
+    signlist = []
+    for line in iterable:
+        x = regex.fullmatch(line)
+        if x:
+            qflist.append(line)
+            signlist.append(tuple(map(x.group, range(1,4))))
 
-    b.populate_quickfix(errargs)
-    b.populate_signs(signargs)
+    print(qflist)
+    print(signlist)
+
+    b.populate_quickfix(qflist)
+    b.populate_signs(signlist)
+
+
+if __name__ == '__main__':
+    a = sys.argv[1:]
+
+    x = subprocess.run(a, stdout=subprocess.PIPE, universal_newlines=True)
+    load_output(x.stdout.split('\n'))
