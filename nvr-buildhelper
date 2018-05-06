@@ -59,14 +59,15 @@ def load_output(iterable):
     :param iterable: An iterable of string lines.
     """
     b = Buildhelper()
-    regex = re.compile(r"^([^:]+):(\d+):\d+: (warning|error):.*")
+    regex = re.compile(r"^([^:]+):(\d+):\d+: (fatal )?(warning|error):.*")
     qflist = []
     signlist = []
     for line in iterable:
         x = regex.fullmatch(line)
         if x:
+            print(line)
             qflist.append(line)
-            signlist.append(tuple(map(x.group, range(1,4))))
+            signlist.append(tuple(map(x.group, (1,2,4))))
 
     b.populate_quickfix(qflist)
     b.populate_signs(signlist)
@@ -74,5 +75,8 @@ def load_output(iterable):
 
 if __name__ == '__main__':
     cmd = sys.argv[1:]
-    proc = subprocess.run(cmd, stdout=subprocess.PIPE, universal_newlines=True)
+    proc = subprocess.run(cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            universal_newlines=True)
     load_output(proc.stdout.split('\n'))
